@@ -65,6 +65,8 @@ class Player:
         self.imposter_wins = imposter_wins
         self.teammate_wins = teammate_wins
         self.imposter = False
+        self.votes = 0
+        self.vote_target = ''
 
     def get_sheet_data(self):
         return [self.name, self.score, self.games_played, self.imposter_wins, self.teammate_wins]
@@ -85,6 +87,7 @@ class Team:
         self.name = name
         self.players = []
         self.imposter_count = imposter_count
+        self.won = False
 
     def set_players(self, players, exempt_players):
         self.players = [player for player in players if player not in exempt_players]
@@ -222,24 +225,62 @@ class Client(discord.Client):
                 print(Game.exempt_player_list)
 
             elif command[0] == 'start':
-                report_delay = int(command[1].split(':')[1]) * 60 + int(command[1].split(':')[0])
+                report_delay = int(command[1].split(':')[0]) * 60 + int(command[1].split(':')[1])
                 sleep(report_delay)
                 Game.assign_imposters()
+                for player in Game.player_list:
+                    if player.imposter:
+                        team_name = [team.name for team in Game.teams if player in team.players][0]
+                        discord_user = [user for user in await self.get_users_in_voice_channel(await self.get_channel_by_name(team_name)) if user.name == player.name][0]
+                        await discord_user.send('sus')
 
                 for team in Game.teams:
                     print(f'Team {team.name} players:')
                     for player in team.players:
                         print(f'    {player.name} is {"not" if not player.imposter else ""}the imposter')
 
-                # todo: stopping and voting things
+            elif command[0] == 'stop':
+                winning_team = command[1]
+                [team for team in Game.teams if team.name == winning_team][0].won = True
 
+                out = 'It\'s time to vote! Send your DMs to me.\n' \
+                      '----------------------------------------\n'
+                for team in Game.teams:
+                    out += f'Team {team.name} players:\n'
+                    for player in team.players:
+                        out += f'\t{player.name}\n'
+                await message.channel.send(out)
+
+            elif command[0] == 'vote':
+                vote_target = command[1]
+                player = Game.get_player(message.author.name)
+                if player.vote_target != vote_target and vote_target == '':
+                    Game.get_player(vote_target).votes += 1
+                    player.vote_target = vote_target
+                elif player.vote_target != vote_target and vote_target != '':
+                    Game.get_player(player.vote_target).votes -= 1
+                    Game.get_player(vote_target).votes += 1
+                    player.vote_target = vote_target
+
+            elif command[0] == 'score':
+                for team in Game.teams:
+                    most_votes = 0
+                    suspects = []
+                    for player in team.players:
+                        if player.votes == most_votes:
+                            suspects.append(player)
+                        elif player.votes > most_votes:
+                            most_votes = player.votes
+                            suspects = [player]
+
+                # todo: score
 
 def main():
     Game.create()
     for player in Game.player_list:
         print(f'{player.name} | {player.score} | {player.imposter_wins} | {player.teammate_wins} | {player.games_played}')
     client = Client()
-    client.run('ODMyNDI1MzIzNDg0MjgyOTMw.YHjmfg.HyA6wir8yQnU4WVG2Q9WzanyYHc')
+    client.run('ODMy NDI1MzIzN Dg0Mjg yOTMw.YHjmf g.MlaDsiM vpGwXdV 5-yCN DXUX5 kmk')
 
 
 if __name__ == '__main__':
